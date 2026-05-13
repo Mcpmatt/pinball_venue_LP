@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pinball Venue Floor Simulator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #ffffff; color: #1a1a1a; padding: 2rem; max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 2rem; }
+  .section-head { font-size: 12px; font-weight: 500; color: #666; margin: 1.5rem 0 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ctrl-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .ctrl-label { font-size: 13px; color: #555; width: 180px; flex-shrink: 0; }
+  .ctrl-val { font-size: 13px; font-weight: 500; min-width: 48px; text-align: right; }
+  .ctrl-sub { font-size: 11px; color: #999; margin-left: 2px; }
+  input[type=range] { flex: 1; accent-color: #185FA5; }
+  .fixed-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .fixed-label { font-size: 13px; color: #555; width: 180px; flex-shrink: 0; }
+  .fixed-val { font-size: 13px; font-weight: 500; color: #444; }
+  .fixed-note { font-size: 11px; color: #999; font-style: italic; margin-left: 4px; }
+  .floor-wrap { border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; background: #f8f9fa; }
+  .floor-canvas { width: 100%; display: block; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .metric-card { background: #f4f6f9; border-radius: 8px; padding: 12px; }
+  .metric-label { font-size: 11px; color: #666; margin-bottom: 4px; }
+  .metric-val { font-size: 20px; font-weight: 500; color: #1a1a1a; }
+  .metric-sub { font-size: 11px; color: #999; margin-top: 2px; }
+  .space-bar-wrap { margin-bottom: 1.5rem; }
+  .space-bar-track { height: 12px; background: #eee; border-radius: 6px; overflow: hidden; display: flex; }
+  .space-bar-seg { height: 100%; transition: width 0.2s; }
+  .space-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .warn { font-size: 12px; color: #a32d2d; font-weight: 500; margin-top: 8px; min-height: 18px; }
+  .rev-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 1rem; }
+  .rev-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 14px; }
+  .rev-name { font-size: 12px; color: #666; margin-bottom: 2px; }
+  .rev-amt { font-size: 17px; font-weight: 500; color: #1a1a1a; }
+  .rev-note { font-size: 11px; color: #999; margin-top: 2px; }
+  .total-row { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid #e0e0e0; padding-top: 12px; margin-top: 4px; }
+  .total-label { font-size: 13px; color: #555; }
+  .total-val { font-size: 22px; font-weight: 500; color: #1a1a1a; }
+  .util-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .util-label { font-size: 13px; color: #555; width: 180px; flex-shrink: 0; }
+  @media (max-width: 600px) {
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    .rev-grid { grid-template-columns: 1fr; }
+    .ctrl-label, .util-label, .fixed-label { width: 140px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Pinball Venue Floor Simulator</h1>
+<p class="subtitle">Adjust machine counts, bay count, and total sq ft to see space allocation and estimated annual revenue.</p>
+
+<div class="section-head">Space configuration</div>
+<div class="ctrl-row">
+  <span class="ctrl-label">Total sq ft</span>
+  <input type="range" min="2000" max="5000" step="100" value="3500" id="sqft">
+  <span class="ctrl-val" id="sqft-out">3,500</span>
+  <span class="ctrl-sub">sq ft</span>
+</div>
+<div class="ctrl-row">
+  <span class="ctrl-label">FreePlay machines</span>
+  <input type="range" min="5" max="20" step="1" value="15" id="fp">
+  <span class="ctrl-val" id="fp-out">15</span>
+</div>
+<div class="ctrl-row">
+  <span class="ctrl-label">Premium machines</span>
+  <input type="range" min="4" max="14" step="1" value="6" id="prem">
+  <span class="ctrl-val" id="prem-out">6</span>
+</div>
+<div class="ctrl-row">
+  <span class="ctrl-label">Private bays</span>
+  <input type="range" min="0" max="8" step="1" value="2" id="bays">
+  <span class="ctrl-val" id="bays-out">2</span>
+</div>
+<div class="fixed-row">
+  <span class="fixed-label">Back of house</span>
+  <span class="fixed-val">320 sq ft</span>
+  <span class="fixed-note">fixed — machine storage, small repairs, liquor &amp; bar storage, ops/utility</span>
+</div>
+
+<div class="section-head">Space breakdown</div>
+<div class="space-bar-wrap">
+  <div class="space-bar-track">
+    <div class="space-bar-seg" id="bar-fp"    style="background:#185FA5;"></div>
+    <div class="space-bar-seg" id="bar-prem"  style="background:#1D9E75;"></div>
+    <div class="space-bar-seg" id="bar-bay"   style="background:#BA7517;"></div>
+    <div class="space-bar-seg" id="bar-fixed" style="background:#888780;"></div>
+    <div class="space-bar-seg" id="bar-boh"   style="background:#AFA9EC;"></div>
+    <div class="space-bar-seg" id="bar-circ"  style="background:#D3D1C7;"></div>
+  </div>
+  <div class="space-legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#185FA5;"></span>FreePlay floor</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#1D9E75;"></span>Premium room</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#BA7517;"></span>Private bays</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#888780;"></span>Bar + entry + bathrooms</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#AFA9EC;"></span>Back of house</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#D3D1C7;"></span>Circulation</span>
+  </div>
+  <div class="warn" id="warn-msg"></div>
+</div>
+
+<div class="metric-grid">
+  <div class="metric-card"><div class="metric-label">Total machines</div><div class="metric-val" id="m-total">—</div></div>
+  <div class="metric-card"><div class="metric-label">Sq ft used</div><div class="metric-val" id="m-used">—</div><div class="metric-sub" id="m-pct">—</div></div>
+  <div class="metric-card"><div class="metric-label">Sq ft remaining</div><div class="metric-val" id="m-remain">—</div></div>
+  <div class="metric-card"><div class="metric-label">Avg sq ft / machine</div><div class="metric-val" id="m-density">—</div></div>
+</div>
+
+<div class="section-head">Floor plan (proportional)</div>
+<div class="floor-wrap">
+  <canvas class="floor-canvas" id="floorCanvas" height="260"></canvas>
+</div>
+
+<div class="section-head">Utilization assumptions</div>
+<div class="util-row">
+  <span class="util-label">Bay utilization</span>
+  <input type="range" min="10" max="100" step="5" value="50" id="bay-util">
+  <span class="ctrl-val" id="bay-util-out">50</span><span class="ctrl-sub">% of capacity</span>
+</div>
+<div class="util-row">
+  <span class="util-label">Daily visitors</span>
+  <input type="range" min="20" max="200" step="5" value="60" id="visitors">
+  <span class="ctrl-val" id="visitors-out">60</span><span class="ctrl-sub">avg/day</span>
+</div>
+
+<div class="section-head">Annual revenue estimate (conservative)</div>
+<div class="rev-grid">
+  <div class="rev-card">
+    <div class="rev-name">Entry fees — FreePlay</div>
+    <div class="rev-amt" id="rev-entry">—</div>
+    <div class="rev-note" id="rev-entry-note">—</div>
+  </div>
+  <div class="rev-card">
+    <div class="rev-name">Premium play — $1/game</div>
+    <div class="rev-amt" id="rev-prem">—</div>
+    <div class="rev-note" id="rev-prem-note">~$4 casual / ~$12 serious, blended avg $8/visitor</div>
+  </div>
+  <div class="rev-card">
+    <div class="rev-name">Private bays</div>
+    <div class="rev-amt" id="rev-bay">—</div>
+    <div class="rev-note" id="rev-bay-note">—</div>
+  </div>
+  <div class="rev-card">
+    <div class="rev-name">Bar / beverage</div>
+    <div class="rev-amt" id="rev-bar">—</div>
+    <div class="rev-note" id="rev-bar-note">—</div>
+  </div>
+</div>
+<div class="total-row">
+  <span class="total-label">Estimated annual gross revenue</span>
+  <span class="total-val" id="rev-total">—</span>
+</div>
+
+<script>
+const SQ_PER_MACHINE     = 65;
+const SQ_PER_BAY         = 220;
+const FIXED_SQ           = 550;
+const BOH_SQ             = 320;
+const CIRC_FACTOR        = 0.12;
+const PREM_SPEND_PER_VIS = 8;
+const BAR_SPEND_PER_VIS  = 10;
+
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + Math.round(n).toLocaleString();
+
+function calc() {
+  const sqft     = +$('sqft').value;
+  const fp       = +$('fp').value;
+  const prem     = +$('prem').value;
+  const bays     = +$('bays').value;
+  const bayUtil  = +$('bay-util').value / 100;
+  const visitors = +$('visitors').value;
+
+  $('sqft-out').textContent     = sqft.toLocaleString();
+  $('fp-out').textContent       = fp;
+  $('prem-out').textContent     = prem;
+  $('bays-out').textContent     = bays;
+  $('bay-util-out').textContent = $('bay-util').value;
+  $('visitors-out').textContent = visitors;
+
+  const fpSq      = fp   * SQ_PER_MACHINE;
+  const premSq    = prem * SQ_PER_MACHINE;
+  const baySq     = bays * SQ_PER_BAY;
+  const rawUsed   = fpSq + premSq + baySq + FIXED_SQ + BOH_SQ;
+  const circSq    = Math.round(rawUsed * CIRC_FACTOR);
+  const totalUsed = rawUsed + circSq;
+  const remaining = sqft - totalUsed;
+  const pct       = Math.round((totalUsed / sqft) * 100);
+  const totalMachines = fp + prem;
+  const avgDensity    = totalMachines > 0 ? Math.round((fpSq + premSq) / totalMachines) : 0;
+
+  $('m-total').textContent   = totalMachines;
+  $('m-used').textContent    = totalUsed.toLocaleString();
+  $('m-pct').textContent     = pct + '% of total';
+  $('m-remain').textContent  = remaining > 0 ? remaining.toLocaleString() : '0';
+  $('m-density').textContent = avgDensity;
+
+  const warn = $('warn-msg');
+  if (remaining < 0) {
+    warn.textContent = 'Over capacity by ' + Math.abs(remaining).toLocaleString() + ' sq ft — reduce machines, bays, or increase total space.';
+  } else if (remaining < 200) {
+    warn.textContent = 'Very tight — less than 200 sq ft unallocated. No room to reconfigure.';
+  } else if (avgDensity < 58) {
+    warn.textContent = 'Avg space per machine is below 60 sq ft — playability and feel will suffer.';
+  } else {
+    warn.textContent = '';
+  }
+
+  const total = sqft > 0 ? sqft : 1;
+  $('bar-fp').style.width    = Math.min(100, (fpSq    / total) * 100) + '%';
+  $('bar-prem').style.width  = Math.min(100, (premSq  / total) * 100) + '%';
+  $('bar-bay').style.width   = Math.min(100, (baySq   / total) * 100) + '%';
+  $('bar-fixed').style.width = Math.min(100, (FIXED_SQ/ total) * 100) + '%';
+  $('bar-boh').style.width   = Math.min(100, (BOH_SQ  / total) * 100) + '%';
+  $('bar-circ').style.width  = Math.min(100, (circSq  / total) * 100) + '%';
+
+  drawFloor(sqft, fpSq, premSq, baySq, FIXED_SQ, BOH_SQ, circSq, remaining, fp, prem, bays);
+
+  const daysOpen  = 364;
+  const avgEntry  = 12.50;
+  const entryRev  = visitors * avgEntry * daysOpen;
+  const premRev   = visitors * PREM_SPEND_PER_VIS * daysOpen;
+
+  const avgBayBooking         = 95;
+  const bookingsPerBayPerWeek = 3.5 * bayUtil;
+  const bayRev                = bays * bookingsPerBayPerWeek * 52 * avgBayBooking;
+
+  const bayBarExtra = bays * bookingsPerBayPerWeek * 52 * 28;
+  const barRev      = (visitors * daysOpen * BAR_SPEND_PER_VIS) + bayBarExtra;
+
+  const totalRev = entryRev + premRev + bayRev + barRev;
+
+  $('rev-entry').textContent      = fmt(entryRev);
+  $('rev-entry-note').textContent = visitors + ' visitors/day \u00d7 $' + avgEntry.toFixed(2) + ' avg entry';
+  $('rev-prem').textContent       = fmt(premRev);
+  $('rev-bay').textContent        = fmt(bayRev);
+  $('rev-bay-note').textContent   = bays + ' bays \u00d7 ' + Math.round(bayUtil * 100) + '% util \u00d7 $' + avgBayBooking + '/booking';
+  $('rev-bar').textContent        = fmt(barRev);
+  $('rev-bar-note').textContent   = '$' + BAR_SPEND_PER_VIS + '/visitor avg + bay service';
+  $('rev-total').textContent      = fmt(totalRev);
+}
+
+function drawFloor(sqft, fpSq, premSq, baySq, fixedSq, bohSq, circSq, remaining, fp, prem, bays) {
+  const canvas = $('floorCanvas');
+  const W = canvas.offsetWidth || 700;
+  canvas.width = W;
+  const H = 260;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const borderColor = 'rgba(0,0,0,0.07)';
+  const total   = sqft;
+  const pad     = 12;
+  const usableW = W - pad * 2;
+
+  function pctW(sq) { return Math.max(0, Math.min(1, sq / total)) * usableW; }
+
+  const segments = [
+    { sq: fpSq,    color: '#B5D4F4', label: 'FreePlay floor', sub: fp + ' machines',                       textCol: '#0C447C' },
+    { sq: premSq,  color: '#9FE1CB', label: 'Premium room',   sub: prem + ' machines',                     textCol: '#085041' },
+    { sq: baySq,   color: '#FAC775', label: 'Private bays',   sub: bays + (bays === 1 ? ' bay' : ' bays'), textCol: '#633806' },
+    { sq: fixedSq, color: '#D3D1C7', label: 'Bar + entry',    sub: fixedSq + ' sq ft',                     textCol: '#444441' },
+    { sq: bohSq,   color: '#AFA9EC', label: 'Back of house',  sub: bohSq + ' sq ft (fixed)',                textCol: '#3C3489' },
+    { sq: circSq,  color: '#F1EFE8', label: 'Circulation',    sub: circSq + ' sq ft',                      textCol: '#888'    },
+  ];
+
+  if (remaining > 0) {
+    segments.push({ sq: remaining, color: 'transparent', label: 'Available', sub: remaining.toLocaleString() + ' sq ft', textCol: '#bbb', dashed: true });
+  }
+
+  let x = pad;
+  const y    = pad;
+  const rowH = H - pad * 2;
+
+  segments.forEach(seg => {
+    const w = pctW(seg.sq);
+    if (w < 2) return;
+
+    if (seg.dashed) {
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, rowH - 1);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = seg.color;
+      ctx.fillRect(x, y, w, rowH);
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, rowH - 1);
+    }
+
+    if (w > 50) {
+      ctx.fillStyle = seg.textCol;
+      ctx.font = '500 13px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      const cx = x + w / 2;
+      ctx.fillText(seg.label, cx, y + rowH / 2 - 8);
+      ctx.font = '400 11px system-ui, sans-serif';
+      ctx.globalAlpha = 0.8;
+      ctx.fillText(seg.sub, cx, y + rowH / 2 + 10);
+      ctx.globalAlpha = 1;
+    } else if (w > 20) {
+      ctx.save();
+      ctx.translate(x + w / 2, y + rowH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = seg.textCol;
+      ctx.font = '400 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(seg.label, 0, 4);
+      ctx.restore();
+    }
+
+    x += w;
+  });
+
+  ctx.fillStyle = '#999';
+  ctx.font = '400 11px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Total: ' + sqft.toLocaleString() + ' sq ft', pad, H - 4);
+}
+
+['sqft','fp','prem','bays','bay-util','visitors'].forEach(id => {
+  $(id).addEventListener('input', calc);
+});
+
+window.addEventListener('resize', calc);
+calc();
+</script>
+</body>
+</html>
